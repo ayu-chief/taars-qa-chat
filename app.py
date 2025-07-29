@@ -1,46 +1,12 @@
 import streamlit as st
 import pandas as pd
-import html
-import re
 from sentence_transformers import SentenceTransformer, util
+import html
 
 st.set_page_config(page_title="【TAARS】FAQ検索チャット", layout="wide")
 
 # ---------------------------
-# カスタムCSS & ヘッダー
-# ---------------------------
-st.markdown("""
-<style>
-body {
-    background-color: #f4f8f9;
-}
-h1, h2, h3 {
-    color: #004d66;
-}
-div.stButton > button {
-    background-color: #00838f;
-    color: white;
-}
-.qa-container {
-    background-color: #ffffff;
-    border-left: 5px solid #e3f3ec;
-    padding: 1rem;
-    margin-bottom: 1.5rem;
-    border-radius: 8px;
-    box-shadow: 0 0 4px rgba(0,0,0,0.05);
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<div style='background-color: #e3f3ec; padding: 2rem 1rem; border-radius: 6px; text-align: center;'>
-    <h1 style='color: #004d66;'>【TAARS】FAQ検索チャット</h1>
-    <p style='font-size: 1.1rem;'>過去のFAQから似た質問と回答を検索できます</p>
-</div>
-""", unsafe_allow_html=True)
-
-# ---------------------------
-# データ読み込み・マスキング
+# データ読み込みとマスキング
 # ---------------------------
 @st.cache_data
 def load_data():
@@ -58,11 +24,17 @@ def load_masking_lists():
     return pm_names, building_names
 
 def apply_masking(text, pm_names, building_names):
-    for name in sorted(pm_names, key=len, reverse=True):
+    for name in pm_names:
         text = text.replace(name, "〇〇さん")
-    for name in sorted(building_names, key=len, reverse=True):
+    for name in building_names:
         text = text.replace(name, "〇〇物件")
     return text
+
+@st.cache_resource
+def load_model_and_embeddings(df):
+    model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+    embeddings = model.encode(df["question"].tolist(), convert_to_tensor=True)
+    return model, embeddings
 
 def format_conversation(text):
     lines = text.splitlines()
@@ -80,18 +52,26 @@ def format_conversation(text):
         formatted_lines.append(formatted)
     return "\n".join(formatted_lines)
 
-@st.cache_resource
-def load_model_and_embeddings(df):
-    model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-    embeddings = model.encode(df["question"].tolist(), convert_to_tensor=True)
-    return model, embeddings
+# ---------------------------
+# 類似QA検索チャットページ
+# ---------------------------
+def show_chat_page(df, model, corpus_embeddings, pm_names, building_names):
+    st.markdown("""
+    <div style='background-color: #e3f3ec; padding: 2rem 1rem; border-radius: 6px; text-align: center;'>
+        <h1 style='color: #004d66;'>【TAARS】FAQ検索チャット</h1>
+        <p style='font-size: 1.1rem;'>過去のFAQから似た質問と回答を検索できます</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-# ---------------------------
-# 類似QAチャットページ
-# ---------------------------
-def show_chat_page(df, pm_names, building_names, model, corpus_embeddings):
-    st.markdown("**入力例：**  \n- 契約書を再発行したい  \n- 物件の確認方法  \n- 担当者に連絡したい")
+    st.markdown("""
+    **入力例：**  
+    - ログインできない  
+    - 支払い方法を教えてください  
+    - 契約申請について  
+    """)
+
     st.markdown("### 質問を入力してください")
+
     if "visible_count" not in st.session_state:
         st.session_state.visible_count = 10
 
@@ -140,29 +120,29 @@ def show_chat_page(df, pm_names, building_names, model, corpus_embeddings):
         st.session_state.visible_count = 10
 
 # ---------------------------
-# ジャンル別一覧ページ
+# ジャンル別FAQ一覧ページ
 # ---------------------------
 def show_genre_page(df, pm_names, building_names):
-    st.subheader("ジャンル別 FAQ")
-    genre_list = sorted(df["genre"].dropna().unique())
-    selected_genre = st.selectbox("ジャンルを選択", ["すべて"] + genre_list)
+    st.title("ジャンル別 FAQ一覧")
 
-    if selected_genre == "すべて":
+    genre_list = sorted(df["genre"].dropna().unique())
+    selected = st.selectbox("ジャンルを選択", ["すべて"] + genre_list)
+
+    if selected == "すべて":
         filtered = df
     else:
-        filtered = df[df["genre"] == selected_genre]
+        filtered = df[df["genre"] == selected]
 
     if filtered.empty:
         st.info("このジャンルには質問が登録されていません。")
         return
 
-    for i, row in filtered.iterrows():
-        question = html.escape(apply_masking(row["question"], pm_names, building_names))
-        answer = apply_masking(str(row["answer"]), pm_names, building_names)
-
+    for _, row in filtered.iterrows():
+        question = apply_masking(row["question"], pm_names, building_names)
+        answer = apply_masking(row["answer"], pm_names, building_names)
         st.markdown(f"""
         <div class="qa-container">
-            <strong>{question}</strong>
+            <strong>{html.escape(question)}</strong>
             <details style="margin-top: 0.5rem;">
                 <summary style="cursor: pointer;">▼ 回答を見る</summary>
                 <div style="margin-top: 0.5rem;">
@@ -173,16 +153,29 @@ def show_genre_page(df, pm_names, building_names):
         """, unsafe_allow_html=True)
 
 # ---------------------------
-# メイン処理
+# アプリ全体（ルーティング）
 # ---------------------------
 def main():
-    page = st.sidebar.radio("表示ページを選択", ["類似QA検索チャット", "ジャンル別FAQ一覧"])
+    page = st.sidebar.radio("ページを選択してください", ["類似QA検索チャット", "ジャンル別FAQ一覧"])
     df = load_data()
     pm_names, building_names = load_masking_lists()
     model, corpus_embeddings = load_model_and_embeddings(df)
 
+    st.markdown("""
+    <style>
+    .qa-container {
+        background-color: #ffffff;
+        border-left: 5px solid #e3f3ec;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 0 4px rgba(0,0,0,0.05);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     if page == "類似QA検索チャット":
-        show_chat_page(df, pm_names, building_names, model, corpus_embeddings)
+        show_chat_page(df, model, corpus_embeddings, pm_names, building_names)
     else:
         show_genre_page(df, pm_names, building_names)
 
