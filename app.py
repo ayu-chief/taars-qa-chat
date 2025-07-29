@@ -11,8 +11,7 @@ page = st.sidebar.radio("ページ選択", ["🔍 質問で探す", "📂 ジャ
 # --- データ読込 ---
 @st.cache_data
 def load_data():
-    return pd.read_csv("ジャンル分類付き_TAARSお問い合わせ.csv", encoding="utf-8")
-
+    return pd.read_csv("qa_data_with_genre.csv", encoding="utf-8")
 df = load_data()
 
 # --- 会話フォーマット ---
