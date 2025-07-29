@@ -1,29 +1,49 @@
+
 import streamlit as st
 import pandas as pd
 from sentence_transformers import SentenceTransformer, util
 
 st.set_page_config(page_title="【TAARS】FAQ検索チャット", layout="wide")
-st.title("【TAARS】FAQ検索チャット")
-st.markdown("質問を入力すると、過去のFAQから近いものを提案します。")
 
-# 入力例（行間を詰めて表示）
+# Tayori風スタイル（背景色やカード）
 st.markdown("""
 <style>
-ul.input-examples { margin-top: 0.2rem; margin-bottom: 1rem; line-height: 1.2; padding-left: 1.2rem; }
-div.block-container label { margin-bottom: 0.2rem !important; } /* ラベル下の余白を詰める */
+body {
+    background-color: #f4f8f9;
+}
+h1, h2, h3 {
+    color: #004d66;
+}
+div.stButton > button {
+    background-color: #00838f;
+    color: white;
+}
+.st-expanderHeader {
+    background-color: #e0f7fa !important;
+}
+.qa-card {
+    background-color: #ffffff;
+    border-left: 5px solid #26c6da;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 0 4px rgba(0,0,0,0.1);
+    border-radius: 6px;
+}
 </style>
-💡 **入力例**：
-<ul class="input-examples">
-<li>ログインできない</li>
-<li>支払い方法を教えてください</li>
-<li>契約申請について</li>
-</ul>
 """, unsafe_allow_html=True)
 
-# 強調された入力欄タイトル（余白詰め済）
+st.title("【TAARS】FAQ検索チャット")
+st.markdown("Tayori風デザインで、質問を入力すると近いFAQを検索できます。")
+
+st.markdown("""
+💡 **入力例：**  
+- ログインできない  
+- 支払い方法を教えてください  
+- 契約申請について  
+""")
+
 st.markdown("### ❓ **質問を入力してください**")
 
-# 初期表示件数を管理
 if "visible_count" not in st.session_state:
     st.session_state.visible_count = 10
 
@@ -38,7 +58,6 @@ def load_model_and_embeddings(df):
     return model, embeddings
 
 def format_conversation(text):
-    # サポート/ユーザーをアイコン付きに整形
     lines = text.splitlines()
     formatted_lines = []
     for line in lines:
@@ -49,11 +68,9 @@ def format_conversation(text):
         formatted_lines.append(line)
     return "\n".join(formatted_lines)
 
-# データとモデルの読み込み
 df = load_data()
 model, corpus_embeddings = load_model_and_embeddings(df)
 
-# 入力欄
 user_input = st.text_input("", "")
 
 if user_input:
@@ -75,11 +92,12 @@ if user_input:
 
             for hit in filtered_hits[:st.session_state.visible_count]:
                 row = df.iloc[hit["corpus_id"]]
-                st.markdown(f"**{row['question']}**")
-                with st.expander("▶ 回答を見る"):
-                    formatted = format_conversation(str(row['answer']))
-                    st.markdown(formatted.replace("\n", "  \n"))
-                st.markdown("---")
+                with st.container():
+                    st.markdown(f'<div class="qa-card"><strong>{row["question"]}</strong>', unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
+                    with st.expander("▶ 回答を見る"):
+                        formatted = format_conversation(str(row['answer']))
+                        st.markdown(formatted.replace("\n", "  \n"))
 
             if st.session_state.visible_count < num_hits:
                 if st.button("🔽 もっと表示する"):
