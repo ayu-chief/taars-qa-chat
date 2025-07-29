@@ -7,7 +7,7 @@ st.set_page_config(page_title="【TAARS】FAQ検索チャット", layout="wide")
 st.title("【TAARS】FAQ検索チャット")
 st.markdown("質問を入力すると、過去のFAQから近いものを提案します。")
 
-# 入力例：CSSで行間を詰めた表示
+# 入力例（行間を詰めて表示）
 st.markdown("""
 <style>
 ul.input-examples { margin-top: 0.2rem; margin-bottom: 1rem; line-height: 1.2; padding-left: 1.2rem; }
@@ -20,8 +20,12 @@ ul.input-examples { margin-top: 0.2rem; margin-bottom: 1rem; line-height: 1.2; p
 </ul>
 """, unsafe_allow_html=True)
 
-# 強調された入力フィールド見出し
+# 入力欄の見出しを強調
 st.markdown("### ❓ **質問を入力してください**")
+
+# 初期表示件数
+if "visible_count" not in st.session_state:
+    st.session_state.visible_count = 10
 
 @st.cache_data
 def load_data():
@@ -34,7 +38,7 @@ def load_model_and_embeddings(df):
     return model, embeddings
 
 def format_conversation(text):
-    # 会話風の整形：サポートとユーザーの発言に絵文字と改行を入れる
+    # 会話整形（サポート／ユーザーごとに絵文字とラベル付け）
     lines = text.splitlines()
     formatted_lines = []
     for line in lines:
@@ -45,32 +49,38 @@ def format_conversation(text):
         formatted_lines.append(line)
     return "\n".join(formatted_lines)
 
+# データとモデルの読み込み
 df = load_data()
 model, corpus_embeddings = load_model_and_embeddings(df)
 
+# ユーザーの質問入力
 user_input = st.text_input("", "")
 
 if user_input:
     with st.spinner("検索中..."):
         query_embedding = model.encode(user_input, convert_to_tensor=True)
         results = util.semantic_search(query_embedding, corpus_embeddings, top_k=len(df))[0]
-
         filtered_hits = [hit for hit in results if hit["score"] >= 0.5]
         num_hits = len(filtered_hits)
 
         if num_hits == 0:
             st.warning("該当するQAが見つかりませんでした。もう少し具体的に入力してください。")
         else:
-            if num_hits > 10:
-                st.info(f"{num_hits} 件見つかりました。質問をより具体的に入力すると、結果が絞り込まれます。")
-
             st.markdown("### 🔍 類似するQA：")
-            st.info("💬 はサポート、👤 はユーザーの発言を表しています。")  # ← ここが凡例の追加
+            st.info("💬 はサポート、👤 はユーザーの発言を表しています。")
 
-            for hit in filtered_hits:
+            for hit in filtered_hits[:st.session_state.visible_count]:
                 row = df.iloc[hit["corpus_id"]]
                 st.markdown(f"**{row['question']}**")
                 with st.expander("▶ 回答を見る"):
                     formatted = format_conversation(str(row['answer']))
                     st.markdown(formatted.replace("\n", "  \n"))
                 st.markdown("---")
+
+            if st.session_state.visible_count < num_hits:
+                if st.button("🔽 もっと表示する"):
+                    st.session_state.visible_count += 10
+                    st.experimental_rerun()
+else:
+    # 新規入力時はカウンターをリセット
+    st.session_state.visible_count = 10
