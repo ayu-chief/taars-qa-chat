@@ -5,7 +5,7 @@ import html
 
 st.set_page_config(page_title="【TAARS】FAQ検索チャット", layout="wide")
 
-# スタイル（Tayori風）
+# Tayori風スタイル（背景色やカード）
 st.markdown("""
 <style>
 body {
@@ -18,27 +18,21 @@ div.stButton > button {
     background-color: #00838f;
     color: white;
 }
-.qa-container {
-    background-color: #f0f0f0;
-    padding: 2rem;
-    border-radius: 8px;
+.st-expanderHeader {
+    background-color: #e0f7fa !important;
 }
-.qa-card {
+.qa-container {
     background-color: #ffffff;
-    border-radius: 8px;
+    border-left: 5px solid #e3f3ec;
     padding: 1rem;
     margin-bottom: 1.5rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    border-left: 5px solid #26c6da;
-}
-.expander-style > summary {
-    background-color: #e0f7fa !important;
-    font-weight: bold;
+    border-radius: 8px;
+    box-shadow: 0 0 4px rgba(0,0,0,0.05);
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ヘッダー
+# ヘッダー（中央揃え＋背景色）
 st.markdown("""
 <div style='background-color: #e3f3ec; padding: 2rem 1rem; border-radius: 6px; text-align: center;'>
     <h1 style='color: #004d66;'>【TAARS】FAQ検索チャット</h1>
@@ -46,16 +40,18 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# 入力例と説明
+# 入力例
 st.markdown("""
 **入力例：**  
 - ログインできない  
 - 支払い方法を教えてください  
-- 契約申請について
+- 契約申請について  
 """)
+
+# タイトル
 st.markdown("### 質問を入力してください")
 
-# セッション状態
+# 初期表示数のセッション管理
 if "visible_count" not in st.session_state:
     st.session_state.visible_count = 10
 
@@ -70,7 +66,6 @@ def load_model_and_embeddings(df):
     embeddings = model.encode(df["question"].tolist(), convert_to_tensor=True)
     return model, embeddings
 
-# 会話形式の整形
 def format_conversation(text):
     lines = text.splitlines()
     formatted_lines = []
@@ -79,12 +74,12 @@ def format_conversation(text):
             line = line.replace("[サポート]", "💬 **サポート：**")
         elif "[ユーザー]" in line:
             line = line.replace("[ユーザー]", "👤 **ユーザー：**")
-        formatted_lines.append(html.escape(line))
+        formatted_lines.append(line)
     return "\n".join(formatted_lines)
 
-# メイン処理
 df = load_data()
 model, corpus_embeddings = load_model_and_embeddings(df)
+
 user_input = st.text_input("", "")
 
 if user_input:
@@ -101,27 +96,36 @@ if user_input:
             if num_hits > 10:
                 st.info("結果が多いため、質問をさらに具体的にすると絞り込みやすくなります。")
 
-            st.markdown("""
-            <div style='background-color: #e3f3ec; height: 2px; margin: 2rem 0;'></div>
-            <div style='background-color: #e0f0ff; padding: 0.5rem 1rem; border-radius: 6px;'>
-                💬 はサポート、👤 はユーザーの発言を表しています。
+        # 区切り線
+        st.markdown("""<div style='background-color: #e3f3ec; height: 2px; margin: 2rem 0;'></div>""", unsafe_allow_html=True)
+
+        # 説明文（余白なし）
+        st.markdown("""<div style='background-color: #d6e8f3; padding: 0.5rem 1rem; font-size: 0.9rem;'>
+            💬 はサポート、👤 はユーザーの発言を表しています。
+        </div>""", unsafe_allow_html=True)
+
+        # QAカード表示
+        for hit in filtered_hits[:st.session_state.visible_count]:
+            row = df.iloc[hit["corpus_id"]]
+            question = row["question"]
+            answer = row["answer"]
+
+            st.markdown(f"""
+            <div class="qa-container">
+                <strong>{html.escape(question)}</strong>
+                <details style="margin-top: 0.5rem;">
+                    <summary style="cursor: pointer;">▶ 回答を見る</summary>
+                    <div style="margin-top: 0.5rem;">
+                        {html.escape(format_conversation(str(answer))).replace("\\n", "<br>").replace("\n", "<br>")}
+                    </div>
+                </details>
             </div>
-            <div class='qa-container'>
             """, unsafe_allow_html=True)
 
-            for hit in filtered_hits[:st.session_state.visible_count]:
-                row = df.iloc[hit["corpus_id"]]
-                st.markdown(f"""<div class='qa-card'><strong>{html.escape(row["question"])}</strong>""", unsafe_allow_html=True)
-                with st.expander("▶ 回答を見る", expanded=False):
-                    formatted = format_conversation(str(row["answer"]))
-                    st.markdown(formatted.replace("\n", "  \n"), unsafe_allow_html=True)
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            st.markdown("</div>", unsafe_allow_html=True)
-
-            if st.session_state.visible_count < num_hits:
-                if st.button("もっと表示する"):
-                    st.session_state.visible_count += 10
-                    st.rerun()
+        # もっと見るボタン
+        if st.session_state.visible_count < num_hits:
+            if st.button("🔽 もっと表示する"):
+                st.session_state.visible_count += 10
+                st.rerun()
 else:
     st.session_state.visible_count = 10
