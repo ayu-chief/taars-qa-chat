@@ -181,3 +181,35 @@ if user_input:
                 st.rerun()
 else:
     st.session_state.visible_count = 10
+
+
+# -------------------------------
+# ページ2：ジャンル別FAQ一覧
+# -------------------------------
+else:
+    st.title("ジャンル別FAQ一覧")
+    genre_list = sorted(df["ジャンル"].dropna().unique())
+    selected_genre = st.selectbox("ジャンルを選択してください", ["すべて"] + genre_list)
+
+    if selected_genre == "すべて":
+        filtered_df = df
+    else:
+        filtered_df = df[df["ジャンル"] == selected_genre]
+
+    if filtered_df.empty:
+        st.warning("該当するFAQが見つかりませんでした。")
+    else:
+        for idx, row in filtered_df.iterrows():
+            question = html.escape(apply_masking(row["質問"], pm_names, building_names))
+            answer = apply_masking(str(row["回答"]), pm_names, building_names)
+            st.markdown(f"""
+            <div style='background-color: #ffffff; border-left: 5px solid #e3f3ec; padding: 1rem; margin-bottom: 1.5rem; border-radius: 8px; box-shadow: 0 0 4px rgba(0,0,0,0.05);'>
+                <strong>{question}</strong>
+                <details style='margin-top: 0.5rem;'>
+                    <summary style='cursor: pointer;'>▼ 回答を見る</summary>
+                    <div style='margin-top: 0.5rem;'>
+                        {format_conversation(answer)}
+                    </div>
+                </details>
+            </div>
+            """, unsafe_allow_html=True)
