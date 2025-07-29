@@ -2,14 +2,6 @@ import streamlit as st
 import pandas as pd
 from sentence_transformers import SentenceTransformer, util
 import html
-import re
-
-def mask_personal_info(text):
-    # 人名らしきものを「〇〇さん」に変換
-    text = re.sub(r'[一-龥]{2,4}(　|\s)?[一-龥]{1,3}(さん)?', '〇〇さん', text)
-    # 物件名らしきものを「〇〇物件」に変換
-    text = re.sub(r'[一-龥A-Za-z0-9\-]{2,}(マンション|ビル|アパート|団地|ハイツ)', '〇〇物件', text)
-    return text
 
 st.set_page_config(page_title="【TAARS】FAQ検索チャット", layout="wide")
 
@@ -64,10 +56,7 @@ if "visible_count" not in st.session_state:
 
 @st.cache_data
 def load_data():
-    df = pd.read_csv("qa_data.csv", encoding="utf-8")
-    df["question"] = df["question"].apply(mask_personal_info)
-    df["answer"] = df["answer"].apply(mask_personal_info)
-    return df
+    return pd.read_csv("qa_data.csv", encoding="utf-8")
 
 @st.cache_resource
 def load_model_and_embeddings(df):
