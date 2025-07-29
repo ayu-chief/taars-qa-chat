@@ -80,7 +80,7 @@ if user_input:
             if st.session_state.visible_count < num_hits:
                 if st.button("🔽 もっと表示する"):
                     st.session_state.visible_count += 10
-                    st.experimental_rerun()
+                    st.rerun()
 else:
     # 新規入力時はカウンターをリセット
     st.session_state.visible_count = 10
