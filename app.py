@@ -1,14 +1,12 @@
 import streamlit as st
 import pandas as pd
-import re
-import html
 from sentence_transformers import SentenceTransformer, util
+import html
+import re
 
-# ---------------------------
-# ページ設定・スタイル
-# ---------------------------
 st.set_page_config(page_title="【TAARS】FAQ検索チャット", layout="wide")
 
+# カスタムCSS
 st.markdown("""
 <style>
 body {
@@ -32,42 +30,24 @@ div.stButton > button {
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------------------
-# 定型句・表記ゆれ対応
-# ---------------------------
-def clean_common_phrases(text: str) -> str:
-    patterns = [
-        r"(いつも)?(大変)?(お|御)?世話になって(おり|い)?ます[。！、]?",
-        r"(い|イ)?つも(の)?(ご)?利用(いただき)?(ありがとう|有難う)?ございます[。！、]?",
-        r"(今後とも)?(何卒)?(どうぞ)?(よ|宜)しく(お)?願(いいた)?します[。！、]?",
-        r"(ご)?確認(のほど)?(お)?願(い)?(いた)?します[。！、]?",
-        r"(大変)?(恐|おそ)れ(入|い)ります[。！、]?",
-        r"(誠に)?(申|もう)し訳(ございません|ありません)[。！、]?",
-        r"(ご)?対応(いただき)?(ありがとう|有難う)?ございます[。！、]?",
-        r"(失礼(い)?たします|しつれい(いた)?します)[。！、]?",
-        r"(以上)?(、)?(何卒)?(よろしく)?(お)?願(い)?(いた)?します[。！、]?"
-    ]
-    for pattern in patterns:
-        text = re.sub(pattern, "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\s+", " ", text)
-    text = re.sub(r"^[。、\s]+|[。、\s]+$", "", text)
-    return text.strip()
+# ヘッダー
+st.markdown("""
+<div style='background-color: #e3f3ec; padding: 2rem 1rem; border-radius: 6px; text-align: center;'>
+    <h1 style='color: #004d66;'>【TAARS】FAQ検索チャット</h1>
+    <p style='font-size: 1.1rem;'>過去のFAQから似た質問と回答を検索できます</p>
+</div>
+""", unsafe_allow_html=True)
 
-# ---------------------------
-# データ読み込み・前処理
-# ---------------------------
 @st.cache_data
 def load_data():
     df = pd.read_csv("qa_data_with_genre.csv", encoding="utf-8")
-    df.columns = df.columns.str.replace(r"\s+", "", regex=True)
-    df = df.rename(columns={
+    col_map = {
         "問い合わせ内容": "question",
         "返信内容": "answer",
         "ジャンル": "genre"
-    })
+    }
+    df = df.rename(columns=col_map)
     df = df[["question", "answer", "genre"]].dropna()
-    df["question"] = df["question"].apply(lambda x: clean_common_phrases(str(x)))
-    df["answer"] = df["answer"].apply(lambda x: clean_common_phrases(str(x)))
     return df
 
 @st.cache_data
@@ -78,18 +58,31 @@ def load_masking_lists():
     building_names = set(df_bld.iloc[:, 0].astype(str))
     return pm_names, building_names
 
+@st.cache_resource
+def load_model_and_embeddings(df):
+    model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+    texts = [normalize_text(q) for q in df["question"].tolist()]
+    embeddings = model.encode(texts, convert_to_tensor=True)
+    return model, embeddings
+
+def normalize_text(text):
+    # あいさつ・定型句の除去
+    greetings = [
+        r"いつもお世話になっております", r"大変お世話になっております", r"お世話になっております", r"お世話になっています",
+        r"よろしくお願いいたします", r"よろしくお願いします", r"お願いいたします", r"お願い致します",
+        r"ご確認ください", r"ご連絡ください", r"ご対応お願いいたします", r"ご対応お願いします",
+        r"失礼いたします", r"失礼します"
+    ]
+    for phrase in greetings:
+        text = re.sub(phrase, "", text)
+    return text.strip()
+
 def apply_masking(text, pm_names, building_names):
     for name in pm_names:
         text = text.replace(name, "〇〇さん")
     for name in building_names:
         text = text.replace(name, "〇〇物件")
     return text
-
-@st.cache_resource
-def load_model_and_embeddings(df):
-    model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-    embeddings = model.encode(df["question"].tolist(), convert_to_tensor=True)
-    return model, embeddings
 
 def format_conversation(text):
     lines = text.splitlines()
@@ -107,37 +100,41 @@ def format_conversation(text):
         formatted_lines.append(formatted)
     return "\n".join(formatted_lines)
 
-# ---------------------------
-# 類似検索ページ
-# ---------------------------
 def show_chat_page(df, model, corpus_embeddings, pm_names, building_names):
     st.subheader("質問を入力してください")
-    example_expander = st.expander("入力例を見る")
-    with example_expander:
-        st.markdown("""
-        - 契約書を再発行したい  
-        - 物件の確認方法  
-        - 担当者に連絡したい  
-        """)
+
+    st.markdown("""
+    <div style="border:1px solid #ddd; padding: 1rem; border-radius: 6px; background-color: #f9f9f9; margin-bottom: 1rem;">
+    <strong>入力例：</strong><br>
+    ・契約書を再発行したい<br>
+    ・物件の確認方法<br>
+    ・担当者に連絡したい
+    </div>
+    """, unsafe_allow_html=True)
+
     if "visible_count" not in st.session_state:
         st.session_state.visible_count = 10
     user_input = st.text_input("", "")
+
     if user_input:
         st.session_state.visible_count = 10
         with st.spinner("検索中..."):
-            query_embedding = model.encode(user_input, convert_to_tensor=True)
+            query_embedding = model.encode(normalize_text(user_input), convert_to_tensor=True)
             results = util.semantic_search(query_embedding, corpus_embeddings, top_k=len(df))[0]
             filtered_hits = [hit for hit in results if hit["score"] >= 0.5]
             num_hits = len(filtered_hits)
+
         if num_hits == 0:
             st.warning("該当するQAが見つかりませんでした。もう少し具体的に入力してください。")
         else:
             st.markdown(f"<p style='color: #0a7f4d; font-weight: 500;'>{num_hits} 件の結果が見つかりました。</p>", unsafe_allow_html=True)
             if num_hits > 10:
                 st.markdown("<p style='color: #1565c0;'>結果が多いため、質問を <strong>簡潔に</strong> すると絞り込みやすくなります。</p>", unsafe_allow_html=True)
+
         st.markdown("<div style='background-color: #e3f3ec; height: 2px; margin: 2rem 0;'></div>", unsafe_allow_html=True)
         st.markdown("<div style='background-color: #d6e8f3; padding: 0.5rem 1rem; font-size: 0.9rem;'>💬 はサポート、👤 はユーザーの発言を表しています。</div>", unsafe_allow_html=True)
         st.markdown("<div style='margin-top: 2rem;'></div>", unsafe_allow_html=True)
+
         for hit in filtered_hits[:st.session_state.visible_count]:
             row = df.iloc[hit["corpus_id"]]
             question = html.escape(apply_masking(row["question"], pm_names, building_names))
@@ -153,59 +150,43 @@ def show_chat_page(df, model, corpus_embeddings, pm_names, building_names):
                 </details>
             </div>
             """, unsafe_allow_html=True)
+
         if st.session_state.visible_count < num_hits:
             if st.button("🔽 もっと表示する"):
                 st.session_state.visible_count += 10
                 st.rerun()
 
-# ---------------------------
-# ジャンル別ページ
-# ---------------------------
 def show_genre_page(df, pm_names, building_names):
-    st.subheader("ジャンル別 FAQ一覧")
-    genre_list = sorted(df["genre"].dropna().unique())
-    selected_genre = st.selectbox("ジャンルを選択", ["すべて"] + genre_list)
-    if selected_genre == "すべて":
-        filtered = df
-    else:
-        filtered = df[df["genre"] == selected_genre]
-    if filtered.empty:
-        st.info("このジャンルには質問が登録されていません。")
-    for _, row in filtered.iterrows():
-        question = html.escape(apply_masking(row["question"], pm_names, building_names))
-        answer = apply_masking(str(row["answer"]), pm_names, building_names)
-        st.markdown(f"""
-        <div class="qa-container">
-            <strong>{question}</strong>
-            <details style="margin-top: 0.5rem;">
-                <summary style="cursor: pointer;">▼ 回答を見る</summary>
-                <div style="margin-top: 0.5rem;">
-                    {format_conversation(answer)}
-                </div>
-            </details>
-        </div>
-        """, unsafe_allow_html=True)
+    st.subheader("ジャンルを選んでFAQを表示")
+    genres = sorted(df["genre"].dropna().unique())
+    selected_genre = st.selectbox("ジャンルを選択", ["-- 選択してください --"] + genres)
 
-# ---------------------------
-# メインアプリ
-# ---------------------------
-def main():
-    st.markdown("""
-    <div style='background-color: #e3f3ec; padding: 2rem 1rem; border-radius: 6px; text-align: center;'>
-        <h1 style='color: #004d66;'>【TAARS】FAQ検索チャット</h1>
-        <p style='font-size: 1.1rem;'>過去のFAQから似た質問と回答を検索できます</p>
-    </div>
-    """, unsafe_allow_html=True)
+    if selected_genre != "-- 選択してください --":
+        filtered_df = df[df["genre"] == selected_genre]
+        st.write(f"{len(filtered_df)} 件のFAQが見つかりました。")
+        for _, row in filtered_df.iterrows():
+            question = html.escape(apply_masking(row["question"], pm_names, building_names))
+            answer = apply_masking(str(row["answer"]), pm_names, building_names)
+            st.markdown(f"""
+            <div class="qa-container">
+                <strong>{question}</strong>
+                <details style="margin-top: 0.5rem;">
+                    <summary style="cursor: pointer;">▼ 回答を見る</summary>
+                    <div style="margin-top: 0.5rem;">
+                        {format_conversation(answer)}
+                    </div>
+                </details>
+            </div>
+            """, unsafe_allow_html=True)
 
-    df = load_data()
-    pm_names, building_names = load_masking_lists()
-    model, corpus_embeddings = load_model_and_embeddings(df)
+# データとモデル読み込み
+df = load_data()
+pm_names, building_names = load_masking_lists()
+model, corpus_embeddings = load_model_and_embeddings(df)
 
-    page = st.sidebar.radio("ページを選択", ["類似QA検索チャット", "ジャンル別FAQ一覧"])
-    if page == "類似QA検索チャット":
-        show_chat_page(df, model, corpus_embeddings, pm_names, building_names)
-    else:
-        show_genre_page(df, pm_names, building_names)
-
-if __name__ == "__main__":
-    main()
+# ページ切替
+page = st.sidebar.radio("表示ページを選んでください", ["類似QA検索チャット", "ジャンル別FAQ一覧"])
+if page == "類似QA検索チャット":
+    show_chat_page(df, model, corpus_embeddings, pm_names, building_names)
+else:
+    show_genre_page(df, pm_names, building_names)
