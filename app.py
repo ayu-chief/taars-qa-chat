@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 from sentence_transformers import SentenceTransformer, util
@@ -25,8 +24,8 @@ def load_model_and_embeddings(df):
     return model, embeddings
 
 def format_conversation(text):
-    # 「○○様」「[サポート]」などで送受信を区切って改行
-    text = re.sub(r"(\n)?(\[サポート\]|\*{0,2}.*様\*{0,2})", r"\n---\n\2", text)
+    # サポート対応や氏名ごとのやり取りを見やすく整形（例：「〇〇様」「[サポート]」など）
+    text = re.sub(r"(\n)?(\[サポート\]|[\w\s]+様)", r"\n---\n\2", text)
     return text.strip()
 
 df = load_data()
@@ -39,7 +38,7 @@ if user_input:
         query_embedding = model.encode(user_input, convert_to_tensor=True)
         results = util.semantic_search(query_embedding, corpus_embeddings, top_k=len(df))[0]
 
-        # スコア0.5以上を表示
+        # 類似度0.5以上のみ表示
         filtered_hits = [hit for hit in results if hit["score"] >= 0.5]
         num_hits = len(filtered_hits)
 
@@ -47,7 +46,7 @@ if user_input:
             st.warning("該当するQAが見つかりませんでした。もう少し具体的に入力してください。")
         else:
             if num_hits > 10:
-                st.info(f"{num_hits} 件見つかりました。検索結果が多いため、質問内容をさらに詳細に入力することで絞り込めます。")
+                st.info(f"{num_hits} 件見つかりました。質問をより具体的に入力すると、結果が絞り込まれます。")
 
             st.markdown("### 🔍 類似するQA：")
             for hit in filtered_hits:
@@ -55,6 +54,5 @@ if user_input:
                 st.markdown(f"**{row['question']}**")
                 with st.expander("▶ 回答を見る"):
                     formatted = format_conversation(str(row['answer']))
-                    st.markdown(formatted.replace("\n", "  
-"))
+                    st.markdown(formatted.replace("\n", "  \n"))  # Streamlitでの改行表示
                 st.markdown("---")
