@@ -4,7 +4,7 @@ from sentence_transformers import SentenceTransformer, util
 
 st.set_page_config(page_title="【TAARS】FAQ検索チャット", layout="wide")
 
-# Tayori風スタイル（背景色やカード）
+# Tayori風スタイル
 st.markdown("""
 <style>
 body {
@@ -31,7 +31,7 @@ div.stButton > button {
 </style>
 """, unsafe_allow_html=True)
 
-# ヘッダーの中央揃え＋背景色
+# ヘッダー
 st.markdown("""
 <div style='background-color: #e3f3ec; padding: 2rem 1rem; border-radius: 6px; text-align: center;'>
     <h1 style='color: #004d66;'>【TAARS】FAQ検索チャット</h1>
@@ -39,14 +39,14 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# 入力例と検索欄
+# 入力例と入力欄
 st.markdown("""
-💡 **入力例：**  
+**入力例：**  
 - ログインできない  
 - 支払い方法を教えてください  
 - 契約申請について  
 """)
-st.markdown("### ❓ **質問を入力してください**")
+st.markdown("### 質問を入力してください")
 
 if "visible_count" not in st.session_state:
     st.session_state.visible_count = 10
@@ -94,7 +94,7 @@ if user_input:
             # 区切り線と見出し
             st.markdown("""
             <div style='background-color: #e3f3ec; height: 2px; margin: 2rem 0;'></div>
-            <h3 style='color: #004d66;'>🔍 類似するQA：</h3>
+            <h3 style='color: #004d66;'>類似するQA：</h3>
             """, unsafe_allow_html=True)
 
             st.info("💬 はサポート、👤 はユーザーの発言を表しています。")
@@ -109,7 +109,7 @@ if user_input:
                         st.markdown(formatted.replace("\n", "  \n"))
 
             if st.session_state.visible_count < num_hits:
-                if st.button("🔽 もっと表示する"):
+                if st.button("もっと表示する"):
                     st.session_state.visible_count += 10
                     st.rerun()
 else:
