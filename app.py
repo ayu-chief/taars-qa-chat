@@ -6,30 +6,6 @@ import re
 
 st.set_page_config(page_title="【TAARS】FAQ検索チャット", layout="wide")
 
-# カスタムCSS
-st.markdown("""
-<style>
-body {
-    background-color: #f4f8f9;
-}
-h1, h2, h3 {
-    color: #004d66;
-}
-div.stButton > button {
-    background-color: #00838f;
-    color: white;
-}
-.qa-container {
-    background-color: #ffffff;
-    border-left: 5px solid #e3f3ec;
-    padding: 1rem;
-    margin-bottom: 1.5rem;
-    border-radius: 8px;
-    box-shadow: 0 0 4px rgba(0,0,0,0.05);
-}
-</style>
-""", unsafe_allow_html=True)
-
 # ヘッダー
 st.markdown("""
 <div style='background-color: #e3f3ec; padding: 2rem 1rem; border-radius: 6px; text-align: center;'>
@@ -66,7 +42,6 @@ def load_model_and_embeddings(df):
     return model, embeddings
 
 def normalize_text(text):
-    # あいさつ・定型句の除去
     greetings = [
         r"いつもお世話になっております", r"大変お世話になっております", r"お世話になっております", r"お世話になっています",
         r"よろしくお願いいたします", r"よろしくお願いします", r"お願いいたします", r"お願い致します",
@@ -103,18 +78,12 @@ def format_conversation(text):
 def show_chat_page(df, model, corpus_embeddings, pm_names, building_names):
     st.subheader("質問を入力してください")
 
-    st.markdown("""
-    <div style="border:1px solid #ddd; padding: 1rem; border-radius: 6px; background-color: #f9f9f9; margin-bottom: 1rem;">
-    <strong>入力例：</strong><br>
-    ・契約書を再発行したい<br>
-    ・物件の確認方法<br>
-    ・担当者に連絡したい
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("**入力例：**")
+    st.markdown("- 契約書を再発行したい\n- 物件の確認方法\n- 担当者に連絡したい")
 
     if "visible_count" not in st.session_state:
         st.session_state.visible_count = 10
-    user_input = st.text_input("", "")
+    user_input = st.text_input("")
 
     if user_input:
         st.session_state.visible_count = 10
@@ -140,7 +109,7 @@ def show_chat_page(df, model, corpus_embeddings, pm_names, building_names):
             question = html.escape(apply_masking(row["question"], pm_names, building_names))
             answer = apply_masking(str(row["answer"]), pm_names, building_names)
             st.markdown(f"""
-            <div class="qa-container">
+            <div style="background-color: #ffffff; border-left: 5px solid #e3f3ec; padding: 1rem; margin-bottom: 1.5rem; border-radius: 8px; box-shadow: 0 0 4px rgba(0,0,0,0.05);">
                 <strong>{question}</strong>
                 <details style="margin-top: 0.5rem;">
                     <summary style="cursor: pointer;">▼ 回答を見る</summary>
@@ -168,7 +137,7 @@ def show_genre_page(df, pm_names, building_names):
             question = html.escape(apply_masking(row["question"], pm_names, building_names))
             answer = apply_masking(str(row["answer"]), pm_names, building_names)
             st.markdown(f"""
-            <div class="qa-container">
+            <div style="background-color: #ffffff; border-left: 5px solid #e3f3ec; padding: 1rem; margin-bottom: 1.5rem; border-radius: 8px; box-shadow: 0 0 4px rgba(0,0,0,0.05);">
                 <strong>{question}</strong>
                 <details style="margin-top: 0.5rem;">
                     <summary style="cursor: pointer;">▼ 回答を見る</summary>
@@ -179,7 +148,7 @@ def show_genre_page(df, pm_names, building_names):
             </div>
             """, unsafe_allow_html=True)
 
-# データとモデル読み込み
+# 実行処理
 df = load_data()
 pm_names, building_names = load_masking_lists()
 model, corpus_embeddings = load_model_and_embeddings(df)
