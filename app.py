@@ -1,18 +1,52 @@
 import streamlit as st
 import pandas as pd
-from sentence_transformers import SentenceTransformer, util
 import html
+from sentence_transformers import SentenceTransformer, util
 
 st.set_page_config(page_title="【TAARS】FAQ検索チャット", layout="wide")
 
-# ---------------------------
-# データ読み込みとマスキング
-# ---------------------------
+# ---------- カスタムCSS ----------
+st.markdown("""
+<style>
+body {
+    background-color: #f4f8f9;
+}
+h1, h2, h3 {
+    color: #004d66;
+}
+div.stButton > button {
+    background-color: #00838f;
+    color: white;
+}
+.qa-container {
+    background-color: #ffffff;
+    border-left: 5px solid #e3f3ec;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 0 4px rgba(0,0,0,0.05);
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ---------- データ読み込み ----------
 @st.cache_data
 def load_data():
     df = pd.read_csv("qa_data_with_genre.csv", encoding="utf-8")
-    df.columns = df.columns.str.replace(r"\s+", "", regex=True)
-    df = df.rename(columns={"お問い合わせ内容": "question", "返信内容": "answer", "ジャンル": "genre"})
+    df.columns = df.columns.str.strip().str.replace(r"\s+", "", regex=True)
+
+    rename_map = {
+        "お問い合わせ内容": "question",
+        "返信内容": "answer",
+        "ジャンル": "genre"
+    }
+
+    missing = [col for col in rename_map if col not in df.columns]
+    if missing:
+        st.error(f"次の列が見つかりません: {', '.join(missing)}")
+        st.stop()
+
+    df = df.rename(columns=rename_map)
     return df[["question", "answer", "genre"]].dropna()
 
 @st.cache_data
@@ -23,18 +57,19 @@ def load_masking_lists():
     building_names = set(df_bld.iloc[:, 0].astype(str))
     return pm_names, building_names
 
+@st.cache_resource
+def load_model_and_embeddings(df):
+    model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+    embeddings = model.encode(df["question"].tolist(), convert_to_tensor=True)
+    return model, embeddings
+
+# ---------- マスキング ----------
 def apply_masking(text, pm_names, building_names):
     for name in pm_names:
         text = text.replace(name, "〇〇さん")
     for name in building_names:
         text = text.replace(name, "〇〇物件")
     return text
-
-@st.cache_resource
-def load_model_and_embeddings(df):
-    model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-    embeddings = model.encode(df["question"].tolist(), convert_to_tensor=True)
-    return model, embeddings
 
 def format_conversation(text):
     lines = text.splitlines()
@@ -52,10 +87,8 @@ def format_conversation(text):
         formatted_lines.append(formatted)
     return "\n".join(formatted_lines)
 
-# ---------------------------
-# 類似QA検索チャットページ
-# ---------------------------
-def show_chat_page(df, model, corpus_embeddings, pm_names, building_names):
+# ---------- ページ1：類似QA検索 ----------
+def show_search_page(df, model, embeddings, pm_names, building_names):
     st.markdown("""
     <div style='background-color: #e3f3ec; padding: 2rem 1rem; border-radius: 6px; text-align: center;'>
         <h1 style='color: #004d66;'>【TAARS】FAQ検索チャット</h1>
@@ -69,7 +102,6 @@ def show_chat_page(df, model, corpus_embeddings, pm_names, building_names):
     - 支払い方法を教えてください  
     - 契約申請について  
     """)
-
     st.markdown("### 質問を入力してください")
 
     if "visible_count" not in st.session_state:
@@ -80,7 +112,7 @@ def show_chat_page(df, model, corpus_embeddings, pm_names, building_names):
     if user_input:
         with st.spinner("検索中..."):
             query_embedding = model.encode(user_input, convert_to_tensor=True)
-            results = util.semantic_search(query_embedding, corpus_embeddings, top_k=len(df))[0]
+            results = util.semantic_search(query_embedding, embeddings, top_k=len(df))[0]
             filtered_hits = [hit for hit in results if hit["score"] >= 0.5]
             num_hits = len(filtered_hits)
 
@@ -119,14 +151,11 @@ def show_chat_page(df, model, corpus_embeddings, pm_names, building_names):
     else:
         st.session_state.visible_count = 10
 
-# ---------------------------
-# ジャンル別FAQ一覧ページ
-# ---------------------------
+# ---------- ページ2：ジャンル別FAQ ----------
 def show_genre_page(df, pm_names, building_names):
     st.title("ジャンル別 FAQ一覧")
-
-    genre_list = sorted(df["genre"].dropna().unique())
-    selected = st.selectbox("ジャンルを選択", ["すべて"] + genre_list)
+    genres = sorted(df["genre"].dropna().unique())
+    selected = st.selectbox("ジャンルを選択してください", ["すべて"] + genres)
 
     if selected == "すべて":
         filtered = df
@@ -134,15 +163,16 @@ def show_genre_page(df, pm_names, building_names):
         filtered = df[df["genre"] == selected]
 
     if filtered.empty:
-        st.info("このジャンルには質問が登録されていません。")
+        st.warning("このジャンルにはFAQが登録されていません。")
         return
 
     for _, row in filtered.iterrows():
-        question = apply_masking(row["question"], pm_names, building_names)
-        answer = apply_masking(row["answer"], pm_names, building_names)
+        question = html.escape(apply_masking(row["question"], pm_names, building_names))
+        answer = apply_masking(str(row["answer"]), pm_names, building_names)
+
         st.markdown(f"""
         <div class="qa-container">
-            <strong>{html.escape(question)}</strong>
+            <strong>{question}</strong>
             <details style="margin-top: 0.5rem;">
                 <summary style="cursor: pointer;">▼ 回答を見る</summary>
                 <div style="margin-top: 0.5rem;">
@@ -152,30 +182,15 @@ def show_genre_page(df, pm_names, building_names):
         </div>
         """, unsafe_allow_html=True)
 
-# ---------------------------
-# アプリ全体（ルーティング）
-# ---------------------------
+# ---------- アプリ起動 ----------
 def main():
-    page = st.sidebar.radio("ページを選択してください", ["類似QA検索チャット", "ジャンル別FAQ一覧"])
+    page = st.sidebar.radio("表示ページを選んでください", ["類似QA検索チャット", "ジャンル別FAQ一覧"])
     df = load_data()
     pm_names, building_names = load_masking_lists()
-    model, corpus_embeddings = load_model_and_embeddings(df)
-
-    st.markdown("""
-    <style>
-    .qa-container {
-        background-color: #ffffff;
-        border-left: 5px solid #e3f3ec;
-        padding: 1rem;
-        margin-bottom: 1.5rem;
-        border-radius: 8px;
-        box-shadow: 0 0 4px rgba(0,0,0,0.05);
-    }
-    </style>
-    """, unsafe_allow_html=True)
+    model, embeddings = load_model_and_embeddings(df)
 
     if page == "類似QA検索チャット":
-        show_chat_page(df, model, corpus_embeddings, pm_names, building_names)
+        show_search_page(df, model, embeddings, pm_names, building_names)
     else:
         show_genre_page(df, pm_names, building_names)
 
