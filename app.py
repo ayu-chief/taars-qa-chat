@@ -103,7 +103,7 @@ if user_input:
 
             # 青文字のみ表示（背景なし）
             if num_hits > 10:
-                st.markdown("<p style='color: #1565c0;'>結果が多いため、質問をさらに具体的にすると絞り込みやすくなります。</p>", unsafe_allow_html=True)
+                st.markdown("<p style='color: #1565c0;'>結果が多いため、質問を <strong>簡潔に</strong> すると絞り込みやすくなります。</p>", unsafe_allow_html=True)
 
         # 仕切り線
         st.markdown("<div style='background-color: #e3f3ec; height: 2px; margin: 2rem 0;'></div>", unsafe_allow_html=True)
