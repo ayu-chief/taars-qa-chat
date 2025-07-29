@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from sentence_transformers import SentenceTransformer, util
-import re
 
 st.set_page_config(page_title="【TAARS】FAQ検索チャット", layout="wide")
 st.title("【TAARS】FAQ検索チャット")
@@ -11,6 +10,7 @@ st.markdown("質問を入力すると、過去のFAQから近いものを提案�
 st.markdown("""
 <style>
 ul.input-examples { margin-top: 0.2rem; margin-bottom: 1rem; line-height: 1.2; padding-left: 1.2rem; }
+div.block-container label { margin-bottom: 0.2rem !important; } /* ラベル下の余白を詰める */
 </style>
 💡 **入力例**：
 <ul class="input-examples">
@@ -20,10 +20,10 @@ ul.input-examples { margin-top: 0.2rem; margin-bottom: 1rem; line-height: 1.2; p
 </ul>
 """, unsafe_allow_html=True)
 
-# 入力欄の見出しを強調
+# 強調された入力欄タイトル（余白詰め済）
 st.markdown("### ❓ **質問を入力してください**")
 
-# 初期表示件数
+# 初期表示件数を管理
 if "visible_count" not in st.session_state:
     st.session_state.visible_count = 10
 
@@ -38,7 +38,7 @@ def load_model_and_embeddings(df):
     return model, embeddings
 
 def format_conversation(text):
-    # 会話整形（サポート／ユーザーごとに絵文字とラベル付け）
+    # サポート/ユーザーをアイコン付きに整形
     lines = text.splitlines()
     formatted_lines = []
     for line in lines:
@@ -53,7 +53,7 @@ def format_conversation(text):
 df = load_data()
 model, corpus_embeddings = load_model_and_embeddings(df)
 
-# ユーザーの質問入力
+# 入力欄
 user_input = st.text_input("", "")
 
 if user_input:
@@ -66,6 +66,10 @@ if user_input:
         if num_hits == 0:
             st.warning("該当するQAが見つかりませんでした。もう少し具体的に入力してください。")
         else:
+            st.success(f"{num_hits} 件の結果が見つかりました。")
+            if num_hits > 10:
+                st.info("結果が多いため、質問をさらに具体的にすると絞り込みやすくなります。")
+
             st.markdown("### 🔍 類似するQA：")
             st.info("💬 はサポート、👤 はユーザーの発言を表しています。")
 
@@ -82,5 +86,4 @@ if user_input:
                     st.session_state.visible_count += 10
                     st.rerun()
 else:
-    # 新規入力時はカウンターをリセット
     st.session_state.visible_count = 10
