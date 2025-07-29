@@ -2,13 +2,17 @@
 import streamlit as st
 import pandas as pd
 from sentence_transformers import SentenceTransformer, util
+import re
 
 st.set_page_config(page_title="【TAARS】FAQ検索チャット", layout="wide")
 st.title("【TAARS】FAQ検索チャット")
 st.markdown("質問を入力すると、過去のFAQから近いものを提案します。")
 
-with st.expander("💡 入力例（クリックして表示）"):
-    st.markdown("- 例1：ログインできない\n- 例2：支払い方法を教えてください\n- 例3：契約申請について")
+# 入力例を常に表示
+st.markdown("💡 **入力例**：")
+st.markdown("- ログインできない")
+st.markdown("- 支払い方法を教えてください")
+st.markdown("- 契約申請について")
 
 @st.cache_data
 def load_data():
@@ -20,6 +24,11 @@ def load_model_and_embeddings(df):
     embeddings = model.encode(df["question"].tolist(), convert_to_tensor=True)
     return model, embeddings
 
+def format_conversation(text):
+    # 「○○様」「[サポート]」などで送受信を区切って改行
+    text = re.sub(r"(\n)?(\[サポート\]|\*{0,2}.*様\*{0,2})", r"\n---\n\2", text)
+    return text.strip()
+
 df = load_data()
 model, corpus_embeddings = load_model_and_embeddings(df)
 
@@ -30,7 +39,7 @@ if user_input:
         query_embedding = model.encode(user_input, convert_to_tensor=True)
         results = util.semantic_search(query_embedding, corpus_embeddings, top_k=len(df))[0]
 
-        # スコアが一定以上（0.5）だけを抽出
+        # スコア0.5以上を表示
         filtered_hits = [hit for hit in results if hit["score"] >= 0.5]
         num_hits = len(filtered_hits)
 
@@ -45,5 +54,7 @@ if user_input:
                 row = df.iloc[hit["corpus_id"]]
                 st.markdown(f"**{row['question']}**")
                 with st.expander("▶ 回答を見る"):
-                    st.markdown(f"{row['answer']}")
+                    formatted = format_conversation(str(row['answer']))
+                    st.markdown(formatted.replace("\n", "  
+"))
                 st.markdown("---")
