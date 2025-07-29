@@ -76,7 +76,7 @@ df = load_data()
 model, corpus_embeddings = load_model_and_embeddings(df)
 
 # サイドバー
-st.sidebar.title("📘 よくある質問集")
+st.sidebar.title("よくある質問集")
 page = st.sidebar.radio("ページを選択してください", ("検索チャット", "よくある質問から探す"))
 
 if page == "検索チャット":
