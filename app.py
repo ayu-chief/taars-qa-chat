@@ -32,8 +32,15 @@ div.stButton > button {
 </style>
 """, unsafe_allow_html=True)
 
-st.title("【TAARS】FAQ検索チャット")
-st.markdown("Tayori風デザインで、質問を入力すると近いFAQを検索できます。")
+
+# ヘッダーの中央揃え＋背景色
+st.markdown("""
+<div style='background-color: #e3f3ec; padding: 2rem 1rem; border-radius: 6px; text-align: center;'>
+    <h1 style='color: #004d66;'>【TAARS】FAQ検索チャット</h1>
+    <p style='font-size: 1.1rem;'>過去のFAQから似た質問と回答を検索できます</p>
+</div>
+""", unsafe_allow_html=True)
+
 
 st.markdown("""
 💡 **入力例：**  
@@ -87,7 +94,13 @@ if user_input:
             if num_hits > 10:
                 st.info("結果が多いため、質問をさらに具体的にすると絞り込みやすくなります。")
 
-            st.markdown("### 🔍 類似するQA：")
+            
+# 区切り線を背景付きで追加
+st.markdown("""
+<div style='background-color: #e3f3ec; height: 2px; margin: 2rem 0;'></div>
+<h3 style='color: #004d66;'>🔍 類似するQA：</h3>
+""", unsafe_allow_html=True)
+
             st.info("💬 はサポート、👤 はユーザーの発言を表しています。")
 
             for hit in filtered_hits[:st.session_state.visible_count]:
