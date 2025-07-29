@@ -98,9 +98,12 @@ if user_input:
         if num_hits == 0:
             st.warning("該当するQAが見つかりませんでした。もう少し具体的に入力してください。")
         else:
-            st.success(f"{num_hits} 件の結果が見つかりました。")
+            # 緑文字のみ表示（背景なし）
+            st.markdown(f"<p style='color: #0a7f4d; font-weight: 500;'>{num_hits} 件の結果が見つかりました。</p>", unsafe_allow_html=True)
+
+            # 青文字のみ表示（背景なし）
             if num_hits > 10:
-                st.info("結果が多いため、質問をさらに具体的にすると絞り込みやすくなります。")
+                st.markdown("<p style='color: #1565c0;'>結果が多いため、質問をさらに具体的にすると絞り込みやすくなります。</p>", unsafe_allow_html=True)
 
         # 仕切り線
         st.markdown("<div style='background-color: #e3f3ec; height: 2px; margin: 2rem 0;'></div>", unsafe_allow_html=True)
